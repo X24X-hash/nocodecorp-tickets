@@ -395,12 +395,8 @@
   </div>
 
   <script>
-    // Page de suivi de ticket – version connectée à Make
-    // Cette page appelle un webhook Make qui interroge Airtable et renvoie le JSON du ticket.
-
-    // 1. URL du webhook Make (module "Custom webhook" du scénario "API Statut Ticket")
-    // Remplace la valeur ci-dessous par l'URL réelle générée par Make.
-    const MAKE_ENDPOINT = "https://hook.eu1.make.com/TON_WEBHOOK_ICI";
+    // URL du webhook Make
+    const MAKE_ENDPOINT = "https://hook.eu1.make.com/ktxnfxnn7xxdun9v1wfjwuqw1f3cxpqi";
 
     const urlParams = new URLSearchParams(window.location.search);
     const ticketId = urlParams.get("ticket");
@@ -435,148 +431,147 @@
       });
     }
 
-    function showError(message, hint) {
+    function renderError(title, message, detail) {
       const content = document.getElementById("content");
       content.innerHTML = `
         <div class="error">
-          <h2>Impossible d'afficher le ticket</h2>
+          <h2>${title}</h2>
           <p>${message}</p>
-          ${
-            hint
-              ? `<p>${hint}</p>`
-              : ""
-          }
+          ${detail ? `<p><code>${detail}</code></p>` : ""}
         </div>
       `;
     }
 
-    async function loadTicket() {
+    function renderTicket(fields, ticketId) {
+      const content = document.getElementById("content");
+
+      const titre = fields["Titre du ticket"] || "Ticket sans titre";
+      const description = fields["Description"] || "Aucune description fournie.";
+      const statut = fields["Statut"] || "À traiter";
+      const domaine = fields["Domaine"] || "Non renseigné";
+      const niveauPriorite = fields["Niveau de priorité"] || "Faible";
+      const dateCreation = fields["Date de création (création automatique)"];
+      const deadline = fields["Deadline"];
+
+      content.innerHTML = `
+        <div class="ticket-header">
+          <div class="ticket-id-badge">
+            <span class="label">Ticket ID</span>
+            <span class="value">${ticketId}</span>
+          </div>
+          <div class="status-pill ${getStatusClass(statut)}">
+            <span class="status-dot"></span>
+            <span class="status-text">${statut}</span>
+          </div>
+        </div>
+
+        <h2 class="ticket-title">${titre}</h2>
+
+        <div class="meta">
+          <div class="meta-item">
+            <span class="meta-label">Projet</span>
+            <span class="meta-value">NoCodeCorp – Support client</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Domaine</span>
+            <span class="meta-value">${domaine}</span>
+          </div>
+        </div>
+
+        <div class="body-grid">
+          <section class="description">
+            <h3>Détails de la demande</h3>
+            <p>${description}</p>
+          </section>
+
+          <section class="details">
+            <h3>Informations</h3>
+            <div class="detail-row">
+              <span class="detail-label">Priorité</span>
+              <span class="detail-value ${getPriorityClass(niveauPriorite)}">
+                ${niveauPriorite}
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Date de création</span>
+              <span class="detail-value">
+                ${formatDate(dateCreation)}
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Deadline</span>
+              <span class="detail-value">
+                ${formatDate(deadline)}
+              </span>
+            </div>
+          </section>
+        </div>
+
+        <div class="footer">
+          <p>Dernière mise à jour : ${new Date().toLocaleString("fr-FR")}</p>
+          <button class="refresh-btn" onclick="fetchTicket(true)">
+            Actualiser le statut
+          </button>
+        </div>
+      `;
+    }
+
+    async function fetchTicket(fromButton = false) {
       const content = document.getElementById("content");
 
       if (!ticketId) {
-        content.innerHTML = `
-          <div class="error">
-            <h2>Ticket non trouvé</h2>
-            <p>Aucun identifiant de ticket n'a été fourni dans l'URL.</p>
-            <p>Exemple d'URL attendu :</p>
-            <p><code>?ticket=recXXXXXXXXXXXXXX</code></p>
-          </div>
-        `;
+        renderError(
+          "Ticket non trouvé",
+          "Aucun identifiant de ticket n'a été fourni dans l'URL.",
+          "?ticket=recXXXXXXXXXXXXXX"
+        );
         return;
       }
 
-      if (!MAKE_ENDPOINT || MAKE_ENDPOINT.includes("TON_WEBHOOK_ICI")) {
-        showError(
-          "La configuration technique du portail n'est pas finalisée.",
-          "Veuillez renseigner l'URL du webhook Make dans le code (const MAKE_ENDPOINT)."
-        );
-        return;
+      if (!fromButton) {
+        content.innerHTML = `
+          <div class="meta-item" style="max-width: 260px;">
+            <span class="meta-label">Chargement</span>
+            <span class="meta-value">Récupération du statut du ticket...</span>
+          </div>
+        `;
       }
 
       try {
-        const response = await fetch(
-          `${MAKE_ENDPOINT}?ticket=${encodeURIComponent(ticketId)}`
-        );
+        const response = await fetch(`${MAKE_ENDPOINT}?ticket=${encodeURIComponent(ticketId)}`);
 
         if (!response.ok) {
-          showError(
-            "Le ticket n'a pas pu être récupéré.",
-            `Code de réponse : ${response.status}. Vérifiez que l'ID du ticket est correct.`
+          renderError(
+            "Erreur lors de la récupération du ticket",
+            "Le serveur n'a pas pu retourner les informations du ticket.",
+            "Code HTTP : " + response.status
           );
           return;
         }
 
         const data = await response.json();
 
-        // Si Airtable renvoie une erreur (ex. record non trouvé)
-        if (data.error) {
-          showError(
+        if (!data || !data.fields) {
+          renderError(
+            "Ticket introuvable",
             "Aucun ticket ne correspond à cet identifiant.",
-            `Détails techniques : ${data.error.message || "Erreur Airtable."}`
+            "Vérifiez que l'ID Airtable est correct."
           );
           return;
         }
 
-        const fields = data.fields || {};
-        const statut = fields["Statut"] || "À traiter";
-        const titre = fields["Titre du ticket"] || "Ticket sans titre";
-        const description =
-          fields["Description"] ||
-          "Aucune description n'a été renseignée pour ce ticket.";
-        const domaine = fields["Domaine"] || "Non renseigné";
-        const niveauPriorite = fields["Niveau de priorité"] || "Non défini";
-        const dateCreation =
-          fields["Date de création (création automatique)"] || data.createdTime;
-        const deadline = fields["Deadline"] || null;
-
-        content.innerHTML = `
-          <div class="ticket-header">
-            <div class="ticket-id-badge">
-              <span class="label">Ticket ID</span>
-              <span class="value">${data.id || ticketId}</span>
-            </div>
-            <div class="status-pill ${getStatusClass(statut)}">
-              <span class="status-dot"></span>
-              <span class="status-text">${statut}</span>
-            </div>
-          </div>
-
-          <h2 class="ticket-title">${titre}</h2>
-
-          <div class="meta">
-            <div class="meta-item">
-              <span class="meta-label">Projet</span>
-              <span class="meta-value">NoCodeCorp – Support client</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">Domaine</span>
-              <span class="meta-value">${domaine}</span>
-            </div>
-          </div>
-
-          <div class="body-grid">
-            <section class="description">
-              <h3>Détails de la demande</h3>
-              <p>${description}</p>
-            </section>
-
-            <section class="details">
-              <h3>Informations</h3>
-              <div class="detail-row">
-                <span class="detail-label">Priorité</span>
-                <span class="detail-value ${getPriorityClass(niveauPriorite)}">
-                  ${niveauPriorite}
-                </span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Date de création</span>
-                <span class="detail-value">
-                  ${formatDate(dateCreation)}
-                </span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Deadline</span>
-                <span class="detail-value">
-                  ${formatDate(deadline)}
-                </span>
-              </div>
-            </section>
-          </div>
-
-          <div class="footer">
-            <p>Dernière mise à jour : ${new Date().toLocaleString("fr-FR")}</p>
-            <p>Les données affichées proviennent de votre ticket stocké dans Airtable via Make.</p>
-          </div>
-        `;
+        renderTicket(data.fields, data.id || ticketId);
       } catch (err) {
-        showError(
-          "Une erreur technique est survenue lors du chargement du ticket.",
-          "Vérifiez la disponibilité de Make et d'Airtable, puis réessayez."
+        renderError(
+          "Erreur réseau",
+          "Une erreur est survenue lors de l'appel à l'API.",
+          String(err)
         );
       }
     }
 
-    document.addEventListener("DOMContentLoaded", loadTicket);
+    // Lancement initial
+    fetchTicket();
   </script>
 </body>
 </html>
