@@ -354,6 +354,30 @@
       border: 1px solid rgba(148, 163, 184, 0.6);
     }
 
+    .loading {
+      text-align: center;
+      padding: 40px 20px;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(148, 163, 184, 0.3);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading p {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
     @media (max-width: 720px) {
       .body-grid {
         grid-template-columns: minmax(0, 1fr);
@@ -390,7 +414,12 @@
     </header>
 
     <main class="card">
-      <div id="content"></div>
+      <div id="content">
+        <div class="loading">
+          <div class="spinner"></div>
+          <p>Chargement du ticket...</p>
+        </div>
+      </div>
     </main>
   </div>
 
@@ -404,11 +433,10 @@
     function getStatusClass(statut) {
       if (!statut) return "status-a-traiter";
       const s = statut.toLowerCase();
-      if (s.includes("résolu")) return "status-resolu";
+      if (s.includes("résolu") || s.includes("resolu")) return "status-resolu";
       if (s.includes("cours")) return "status-en-cours";
-      if (s.includes("retard")) return "status-en-retard";
+      if (s.includes("retard") || s.includes("prioritaire")) return "status-en-retard";
       if (s.includes("stand")) return "status-standby";
-      if (s.includes("prioritaire")) return "status-en-retard";
       return "status-a-traiter";
     }
 
@@ -509,40 +537,38 @@
 
         <div class="footer">
           <p>Dernière mise à jour : ${new Date().toLocaleString("fr-FR")}</p>
-          <button class="refresh-btn" onclick="fetchTicket(true)">
-            Actualiser le statut
+          <button class="refresh-btn" onclick="fetchTicket()">
+            🔄 Actualiser le statut
           </button>
         </div>
       `;
     }
 
-    async function fetchTicket(fromButton = false) {
+    async function fetchTicket() {
       const content = document.getElementById("content");
 
       if (!ticketId) {
         renderError(
           "Ticket non trouvé",
           "Aucun identifiant de ticket n'a été fourni dans l'URL.",
-          "?ticket=recXXXXXXXXXXXXXX"
+          "Exemple : ?ticket=recGQSk7gJaBPxx7W"
         );
         return;
       }
 
-      if (!fromButton) {
-        content.innerHTML = `
-          <div class="meta-item" style="max-width: 260px;">
-            <span class="meta-label">Chargement</span>
-            <span class="meta-value">Récupération du statut du ticket...</span>
-          </div>
-        `;
-      }
+      content.innerHTML = `
+        <div class="loading">
+          <div class="spinner"></div>
+          <p>Chargement du ticket...</p>
+        </div>
+      `;
 
       try {
         const response = await fetch(`${MAKE_ENDPOINT}?ticket=${encodeURIComponent(ticketId)}`);
 
         if (!response.ok) {
           renderError(
-            "Erreur lors de la récupération du ticket",
+            "Erreur serveur",
             "Le serveur n'a pas pu retourner les informations du ticket.",
             "Code HTTP : " + response.status
           );
